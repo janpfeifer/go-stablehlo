@@ -2,13 +2,12 @@ package shapeinference
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/gomlx/gopjrt/dtypes"
 	"github.com/gx-org/go-stablehlo/internal/optypes"
 	"github.com/gx-org/go-stablehlo/types/shapes"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // Aliases
@@ -34,76 +33,120 @@ func TestBinaryOp(t *testing.T) {
 	// Invalid data types check.
 	var err error
 	_, err = BinaryOp(optypes.And, S(F32), S(F32))
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error for BinaryOp(optypes.And, S(F32), S(F32))")
+	}
 	_, err = BinaryOp(optypes.Multiply, S(Bool, 1), S(Bool, 1))
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error for BinaryOp(optypes.Multiply, S(Bool, 1), S(Bool, 1))")
+	}
 	_, err = BinaryOp(optypes.Multiply, S(Bool, 1), S(Bool, 1))
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error for BinaryOp(optypes.Multiply, S(Bool, 1), S(Bool, 1))")
+	}
 	_, err = BinaryOp(optypes.Xor, S(F32, 1), S(F32, 1))
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error for BinaryOp(optypes.Xor, S(F32, 1), S(F32, 1))")
+	}
 
 	// Invalid operation type (not binary op).
 	_, err = BinaryOp(optypes.Exponential, S(F32), S(F32))
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error for BinaryOp(optypes.Exponential, S(F32), S(F32))")
+	}
 
 	// The same shape should be ok.
 	var output shapes.Shape
 	intMatrixShape := S(I8, 3, 3)
 	output, err = BinaryOp(optypes.Or, intMatrixShape, intMatrixShape)
-	require.NoError(t, err)
-	require.True(t, intMatrixShape.Equal(output))
+	if err != nil {
+		t.Errorf("expected no error for BinaryOp(optypes.Or, intMatrixShape, intMatrixShape), got %v", err)
+	}
+	if !intMatrixShape.Equal(output) {
+		t.Errorf("expected output to be equal to intMatrixShape")
+	}
 
 	// Scalar with matrix.
 	scalarShape := S(F32)
 	matrixShape := S(F32, 2, 3)
 	//expectedShape := S(F32, 2, 3)
 	output, err = BinaryOp(optypes.Add, scalarShape, scalarShape)
-	require.NoError(t, err)
-	require.True(t, scalarShape.Equal(output))
+	if err != nil {
+		t.Errorf("expected no error for BinaryOp(optypes.Add, scalarShape, scalarShape), got %v", err)
+	}
+	if !scalarShape.Equal(output) {
+		t.Errorf("expected output to be equal to scalarShape")
+	}
 	_, err = BinaryOp(optypes.Add, scalarShape, matrixShape)
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error for BinaryOp(optypes.Add, scalarShape, matrixShape)")
+	}
 	//require.True(t, expectedShape.Equal(output))
 
 	// Broadcasting: not provided in StableHLO.
 	shape1 := S(F32, 2, 1, 3)
 	shape2 := S(F32, 1, 4, 3)
 	_, err = BinaryOp(optypes.Add, shape1, shape2)
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error for BinaryOp(optypes.Add, shape1, shape2)")
+	}
 	//expectedBroadcastShape := S(F32, 2, 4, 3)
 	//require.True(t, expectedBroadcastShape.Equal(must1(BinaryOp(optypes.Multiply, shape1, shape2))))
 
 	// Matrix with scalar.
 	_, err = BinaryOp(optypes.Add, matrixShape, scalarShape)
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error for BinaryOp(optypes.Add, matrixShape, scalarShape)")
+	}
 	//require.True(t, expectedShape.Equal(must1(BinaryOp(optypes.Add, matrixShape, scalarShape))))
 
 	// Invalid broadcasting shapes.
 	invalidShape1 := S(F32, 2, 3)
 	invalidShape2 := S(F32, 3, 2)
 	_, err = BinaryOp(optypes.Add, invalidShape1, invalidShape2)
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error for BinaryOp(optypes.Add, invalidShape1, invalidShape2)")
+	}
+}
+
+func checkPanic(t *testing.T, f func()) {
+	t.Helper()
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("The code did not panic")
+		}
+	}()
+	f()
 }
 
 func TestUnaryOp(t *testing.T) {
 	// Invalid data types check.
-	require.Panics(t, func() { must1(UnaryOp(optypes.Not, S(F32))) })
-	require.Panics(t, func() { must1(UnaryOp(optypes.Not, S(dtypes.Complex64))) })
-	require.Panics(t, func() { must1(UnaryOp(optypes.Negate, S(Bool))) })
+	checkPanic(t, func() { must1(UnaryOp(optypes.Not, S(F32))) })
+	checkPanic(t, func() { must1(UnaryOp(optypes.Not, S(dtypes.Complex64))) })
+	checkPanic(t, func() { must1(UnaryOp(optypes.Negate, S(Bool))) })
 
 	// Invalid operation type (not unary op).
-	require.Panics(t, func() { must1(UnaryOp(optypes.Add, S(F32))) })
-	require.Panics(t, func() { must1(UnaryOp(optypes.Negate, S(U64))) })
+	checkPanic(t, func() { must1(UnaryOp(optypes.Add, S(F32))) })
+	checkPanic(t, func() { must1(UnaryOp(optypes.Negate, S(U64))) })
 
 	// Valid operations
 	boolShape := S(Bool, 2, 3)
-	require.True(t, boolShape.Equal(must1(UnaryOp(optypes.Not, boolShape))))
+	if !boolShape.Equal(must1(UnaryOp(optypes.Not, boolShape))) {
+		t.Errorf("expected output to be equal to boolShape")
+	}
 
 	intShape := S(I8, 3, 3)
-	require.True(t, intShape.Equal(must1(UnaryOp(optypes.Not, intShape))))
+	if !intShape.Equal(must1(UnaryOp(optypes.Not, intShape))) {
+		t.Errorf("expected output to be equal to intShape")
+	}
 
 	floatShape := S(F32, 2, 3)
-	require.True(t, floatShape.Equal(must1(UnaryOp(optypes.Exponential, floatShape))))
-	require.True(t, floatShape.Equal(must1(UnaryOp(optypes.Negate, floatShape))))
+	if !floatShape.Equal(must1(UnaryOp(optypes.Exponential, floatShape))) {
+		t.Errorf("expected output to be equal to floatShape")
+	}
+	if !floatShape.Equal(must1(UnaryOp(optypes.Negate, floatShape))) {
+		t.Errorf("expected output to be equal to floatShape")
+	}
 }
 
 func TestGather(t *testing.T) {
@@ -120,9 +163,13 @@ func TestGather(t *testing.T) {
 			offsetOutputAxes, collapsedSliceAxes, operandBatchingAxes,
 			startIndicesBatchingAxes, startIndexMap,
 			sliceSizes, false)
-		require.NoError(t, err)
+		if err != nil {
+			t.Errorf("expected no error, got %v", err)
+		}
 		fmt.Printf("\tTest 1: outputShape=%s\n", output)
-		require.NoError(t, output.Check(F32, 3, 3, 2, 1))
+		if err := output.Check(F32, 3, 3, 2, 1); err != nil {
+			t.Errorf("expected output.Check to pass: %v", err)
+		}
 	})
 
 	t.Run("2", func(t *testing.T) {
@@ -139,9 +186,13 @@ func TestGather(t *testing.T) {
 			offsetOutputAxes, collapsedSliceAxes, operandBatchingAxes,
 			startIndicesBatchingAxes, startIndexMap,
 			sliceSizes, false)
-		require.NoError(t, err)
+		if err != nil {
+			t.Errorf("expected no error, got %v", err)
+		}
 		fmt.Printf("\tTest 2: outputShape=%s\n", output)
-		require.NoError(t, output.Check(F32, 7, 3, 1, 8))
+		if err := output.Check(F32, 7, 3, 1, 8); err != nil {
+			t.Errorf("expected output.Check to pass: %v", err)
+		}
 	})
 
 	t.Run("3", func(t *testing.T) {
@@ -158,9 +209,13 @@ func TestGather(t *testing.T) {
 			offsetOutputAxes, collapsedSliceAxes, operandBatchingAxes,
 			startIndicesBatchingAxes, startIndexMap,
 			sliceSizes, false)
-		require.NoError(t, err)
+		if err != nil {
+			t.Errorf("expected no error, got %v", err)
+		}
 		fmt.Printf("\tTest 3: outputShape=%s\n", output)
-		require.NoError(t, output.Check(F32, 8, 16))
+		if err := output.Check(F32, 8, 16); err != nil {
+			t.Errorf("expected output.Check to pass: %v", err)
+		}
 	})
 
 	// Test from StableHLO's specification example in https://openxla.org/stablehlo/spec#gather
@@ -178,9 +233,13 @@ func TestGather(t *testing.T) {
 			offsetOutputAxes, collapsedSliceAxes, operandBatchingAxes,
 			startIndicesBatchingAxes, startIndexMap,
 			sliceSizes, false)
-		require.NoError(t, err)
+		if err != nil {
+			t.Errorf("expected no error, got %v", err)
+		}
 		fmt.Printf("\tTest 3: outputShape=%s\n", output)
-		require.NoError(t, output.Check(F32, 2, 2, 3, 2, 2))
+		if err := output.Check(F32, 2, 2, 3, 2, 2); err != nil {
+			t.Errorf("expected output.Check to pass: %v", err)
+		}
 	})
 }
 
@@ -206,9 +265,15 @@ func TestScatter(t *testing.T) {
 		operandBatchingAxes, indicesBatchingAxes,
 		scatterAxesToOperandAxes1, indexVectorAxis1,
 		updateComputationInputs1, updateComputationOutputs1)
-	require.NoError(t, err)
-	require.Len(t, outputs1, 1)
-	require.True(t, expected1.Equal(outputs1[0]), "Valid Case 1 Failed: Expected %s, got %s", expected1, outputs1[0])
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+	if len(outputs1) != 1 {
+		t.Errorf("expected len(outputs1) == 1, got %d", len(outputs1))
+	}
+	if !expected1.Equal(outputs1[0]) {
+		t.Errorf("Valid Case 1 Failed: Expected %s, got %s", expected1, outputs1[0])
+	}
 
 	// Case 2: Scattering into a higher-rank tensor
 	// Scatter updates of shape [4] into operand[i, j, :], where [i, j] comes from indices.
@@ -230,9 +295,15 @@ func TestScatter(t *testing.T) {
 		operandBatchingAxes, indicesBatchingAxes,
 		scatterAxesToOperandAxes2, indexVectorAxis2,
 		updateComputationInputs2, updateComputationOutputs2)
-	require.NoError(t, err)
-	require.Len(t, outputs2, 1)
-	require.True(t, expected2.Equal(outputs2[0]), "Valid Case 2 Failed: Expected %s, got %s", expected2, outputs2[0])
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+	if len(outputs2) != 1 {
+		t.Errorf("expected len(outputs2) == 1, got %d", len(outputs2))
+	}
+	if !expected2.Equal(outputs2[0]) {
+		t.Errorf("Valid Case 2 Failed: Expected %s, got %s", expected2, outputs2[0])
+	}
 
 	// Case 3: Different indexVectorAxis
 	// Same as case 2, but indices are [2, 2, 3] -> indexVectorAxis is 1 and different order of axes in the operand.
@@ -251,9 +322,15 @@ func TestScatter(t *testing.T) {
 		operandBatchingAxes, indicesBatchingAxes,
 		scatterAxesToOperandAxes3, indexVectorAxis3,
 		updateComputationInputs3, updateComputationOutputs3)
-	require.NoError(t, err)
-	require.Len(t, outputs3, 1)
-	require.True(t, expected3.Equal(outputs3[0]), "Valid Case 3 Failed (IndexVecAxis=1): Expected %s, got %s", expected3, outputs3[0])
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+	if len(outputs3) != 1 {
+		t.Errorf("expected len(outputs3) == 1, got %d", len(outputs3))
+	}
+	if !expected3.Equal(outputs3[0]) {
+		t.Errorf("Valid Case 3 Failed (IndexVecAxis=1): Expected %s, got %s", expected3, outputs3[0])
+	}
 
 	// Case 4: No insertedWindowAxes (scattering full slices)
 	// Scatter updates of shape [9] into operand [10, 9]
@@ -272,9 +349,15 @@ func TestScatter(t *testing.T) {
 		operandBatchingAxes, indicesBatchingAxes,
 		scatterAxesToOperandAxes4, indexVectorAxis4,
 		updateComputationInputs4, updateComputationOutputs4)
-	require.NoError(t, err)
-	require.Len(t, outputs4, 1)
-	require.True(t, expected4.Equal(outputs4[0]), "Valid Case 4 Failed (No Window): Expected %s, got %s", expected4, outputs4[0])
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+	if len(outputs4) != 1 {
+		t.Errorf("expected len(outputs4) == 1, got %d", len(outputs4))
+	}
+	if !expected4.Equal(outputs4[0]) {
+		t.Errorf("Valid Case 4 Failed (No Window): Expected %s, got %s", expected4, outputs4[0])
+	}
 
 	// Case 5: rearranging the output axes:
 	operand5 := S(F32, 2, 5, 2)
@@ -291,9 +374,15 @@ func TestScatter(t *testing.T) {
 		operandBatchingAxes, indicesBatchingAxes,
 		scatterAxesToOperandAxes5, indexVectorAxis5,
 		updateComputationInputs5, updateComputationOutputs5)
-	require.NoError(t, err)
-	require.Len(t, outputs5, 1)
-	require.True(t, operand5.Equal(outputs5[0]), "Valid Case 5 Failed (No Window): Expected %s, got %s", operand5, outputs5[0])
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+	if len(outputs5) != 1 {
+		t.Errorf("expected len(outputs5) == 1, got %d", len(outputs5))
+	}
+	if !operand5.Equal(outputs5[0]) {
+		t.Errorf("Valid Case 5 Failed (No Window): Expected %s, got %s", operand5, outputs5[0])
+	}
 }
 
 func TestSlice(t *testing.T) {
@@ -307,8 +396,12 @@ func TestSlice(t *testing.T) {
 	strides1 := []int{1}
 	expected1 := S(F32, 6)
 	output1, err := Slice(operand1, starts1, limits1, strides1)
-	require.NoError(t, err)
-	require.True(t, expected1.Equal(output1), "%s Valid Case 1 Failed: Expected %s, got %s", opName, expected1, output1)
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+	if !expected1.Equal(output1) {
+		t.Errorf("%s Valid Case 1 Failed: Expected %s, got %s", opName, expected1, output1)
+	}
 
 	// Case 2: 2D slice with stride 1
 	operand2 := S(I32, 5, 6)
@@ -317,8 +410,12 @@ func TestSlice(t *testing.T) {
 	strides2 := []int{1, 1}
 	expected2 := S(I32, 3, 3)
 	output2, err := Slice(operand2, starts2, limits2, strides2)
-	require.NoError(t, err)
-	require.True(t, expected2.Equal(output2), "%s Valid Case 2 Failed: Expected %s, got %s", opName, expected2, output2)
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+	if !expected2.Equal(output2) {
+		t.Errorf("%s Valid Case 2 Failed: Expected %s, got %s", opName, expected2, output2)
+	}
 
 	// Case 3: 3D slice with different strides
 	operand3 := S(Bool, 10, 8, 6)
@@ -330,8 +427,12 @@ func TestSlice(t *testing.T) {
 	// Dim 2: (6-1)/1 = 5 -> 5 elements (indices 1, 2, 3, 4, 5)
 	expected3 := S(Bool, 5, 3, 5)
 	output3, err := Slice(operand3, starts3, limits3, strides3)
-	require.NoError(t, err)
-	require.True(t, expected3.Equal(output3), "%s Valid Case 3 Failed: Expected %s, got %s", opName, expected3, output3)
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+	if !expected3.Equal(output3) {
+		t.Errorf("%s Valid Case 3 Failed: Expected %s, got %s", opName, expected3, output3)
+	}
 
 	// Case 4: Slice resulting in size 1 dimension
 	operand4 := S(F32, 10)
@@ -340,8 +441,12 @@ func TestSlice(t *testing.T) {
 	strides4 := []int{1}
 	expected4 := S(F32, 1)
 	output4, err := Slice(operand4, starts4, limits4, strides4)
-	require.NoError(t, err)
-	require.True(t, expected4.Equal(output4), "%s Valid Case 4 Failed: Expected %s, got %s", opName, expected4, output4)
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+	if !expected4.Equal(output4) {
+		t.Errorf("%s Valid Case 4 Failed: Expected %s, got %s", opName, expected4, output4)
+	}
 
 	// Case 5: Slice taking full dimension with stride > 1
 	operand5 := S(I8, 7)
@@ -351,8 +456,12 @@ func TestSlice(t *testing.T) {
 	// Dim 0: (7-0)/2 = 3.5 -> 4 elements (indices 0, 2, 4, 6)
 	expected5 := S(I8, 4)
 	output5, err := Slice(operand5, starts5, limits5, strides5)
-	require.NoError(t, err)
-	require.True(t, expected5.Equal(output5), "%s Valid Case 5 Failed: Expected %s, got %s", opName, expected5, output5)
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+	if !expected5.Equal(output5) {
+		t.Errorf("%s Valid Case 5 Failed: Expected %s, got %s", opName, expected5, output5)
+	}
 
 	// --- Error Cases ---
 	operand := S(F32, 10, 5) // Rank 2
@@ -362,43 +471,63 @@ func TestSlice(t *testing.T) {
 
 	// Error 1: Invalid operand DType
 	_, err = Slice(shapes.Shape{DType: dtypes.InvalidDType, Dimensions: []int{10}}, []int{0}, []int{5}, []int{1})
-	require.Error(t, err, "%s Error Case 1 Failed: Invalid operand DType", opName)
+	if err == nil {
+		t.Errorf("%s Error Case 1 Failed: Invalid operand DType", opName)
+	}
 
 	// Error 2: Incorrect length for starts
 	_, err = Slice(operand, []int{1}, validLimits, validStrides)
-	require.Error(t, err, "%s Error Case 2 Failed: len(starts) != rank", opName)
+	if err == nil {
+		t.Errorf("%s Error Case 2 Failed: len(starts) != rank", opName)
+	}
 
 	// Error 3: Incorrect length for limits
 	_, err = Slice(operand, validStarts, []int{8}, validStrides)
-	require.Error(t, err, "%s Error Case 3 Failed: len(limits) != rank", opName)
+	if err == nil {
+		t.Errorf("%s Error Case 3 Failed: len(limits) != rank", opName)
+	}
 
 	// Error 4: Incorrect length for strides
 	_, err = Slice(operand, validStarts, validLimits, []int{1})
-	require.Error(t, err, "%s Error Case 4 Failed: len(strides) != rank", opName)
+	if err == nil {
+		t.Errorf("%s Error Case 4 Failed: len(strides) != rank", opName)
+	}
 
 	// Error 5: Zero stride
 	_, err = Slice(operand, validStarts, validLimits, []int{1, 0})
-	require.Error(t, err, "%s Error Case 5 Failed: Zero stride", opName)
+	if err == nil {
+		t.Errorf("%s Error Case 5 Failed: Zero stride", opName)
+	}
 
 	// Error 6: Negative stride
 	_, err = Slice(operand, validStarts, validLimits, []int{-1, 1})
-	require.Error(t, err, "%s Error Case 6 Failed: Negative stride", opName)
+	if err == nil {
+		t.Errorf("%s Error Case 6 Failed: Negative stride", opName)
+	}
 
 	// Error 7: Start index < 0
 	_, err = Slice(operand, []int{-1, 1}, validLimits, validStrides)
-	require.Error(t, err, "%s Error Case 7 Failed: Start < 0", opName)
+	if err == nil {
+		t.Errorf("%s Error Case 7 Failed: Start < 0", opName)
+	}
 
 	// Error 8: Start index >= dimSize
 	_, err = Slice(operand, []int{10, 1}, validLimits, validStrides)
-	require.Error(t, err, "%s Error Case 8 Failed: Start >= dimSize", opName)
+	if err == nil {
+		t.Errorf("%s Error Case 8 Failed: Start >= dimSize", opName)
+	}
 
 	// Error 9: Limit index < start index
 	_, err = Slice(operand, validStarts, []int{0, 4}, validStrides) // limit[0]=0 < start[0]=1
-	require.Error(t, err, "%s Error Case 9 Failed: Limit < Start", opName)
+	if err == nil {
+		t.Errorf("%s Error Case 9 Failed: Limit < Start", opName)
+	}
 
 	// Error 10: Limit index > dimSize
 	_, err = Slice(operand, validStarts, []int{8, 6}, validStrides) // limit[1]=6 > dimSize[1]=5
-	require.Error(t, err, "%s Error Case 10 Failed: Limit > dimSize", opName)
+	if err == nil {
+		t.Errorf("%s Error Case 10 Failed: Limit > dimSize", opName)
+	}
 }
 
 func TestArgMinMax(t *testing.T) {
@@ -408,51 +537,65 @@ func TestArgMinMax(t *testing.T) {
 	operand1 := S(F32, 10)
 	expected1 := S(I32)
 	output1 := must1(ArgMinMax(operand1, 0, I32))
-	require.True(t, expected1.Equal(output1), "Valid Case 1 Failed: Expected %s, got %s", expected1, output1)
+	if !expected1.Equal(output1) {
+		t.Errorf("Valid Case 1 Failed: Expected %s, got %s", expected1, output1)
+	}
 
 	// Case 2: 2D tensor, single axis
 	operand2 := S(F32, 5, 6)
 	expected2 := S(I8, 5)
 	output2 := must1(ArgMinMax(operand2, 1, expected2.DType))
-	require.True(t, expected2.Equal(output2), "Valid Case 2 Failed: Expected %s, got %s", expected2, output2)
+	if !expected2.Equal(output2) {
+		t.Errorf("Valid Case 2 Failed: Expected %s, got %s", expected2, output2)
+	}
 
 	// Case 3: 3D tensor, multiple axes
 	operand3 := S(F32, 4, 5, 6)
 	expected3 := S(U64, 5, 6)
 	output3 := must1(ArgMinMax(operand3, 0, expected3.DType))
-	require.True(t, expected3.Equal(output3), "Valid Case 3 Failed: Expected %s, got %s", expected3, output3)
+	if !expected3.Equal(output3) {
+		t.Errorf("Valid Case 3 Failed: Expected %s, got %s", expected3, output3)
+	}
 
 	// --- Error Cases ---
 
 	// Error 1: Invalid operand DType
-	require.Panics(t, func() {
+	checkPanic(t, func() {
 		must1(ArgMinMax(shapes.Make(dtypes.InvalidDType, 10), 0, I32))
-	}, "Error Case 1 Failed: Invalid operand DType")
+	})
 
 	// Error 2: Invalid axis (out of bounds)
-	require.Panics(t, func() {
+	checkPanic(t, func() {
 		must1(ArgMinMax(operand1, 1, I32)) // operand1 is rank 1, axis 1 invalid
-	}, "Error Case 2 Failed: Invalid axis (out of bounds)")
+	})
 
 	// Error 3: Negative axis
-	require.Panics(t, func() {
+	checkPanic(t, func() {
 		must1(ArgMinMax(operand2, -1, I32))
-	}, "Error Case 3 Failed: Negative axis")
+	})
 }
 
 func TestIsFinite(t *testing.T) {
 	// Positive case: float64 tensor.
 	f64Shape := S(dtypes.Float64, 2, 3)
 	output, err := IsFinite(f64Shape)
-	require.NoError(t, err)
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
 	expected := S(Bool, 2, 3)
-	require.True(t, expected.Equal(output))
+	if !expected.Equal(output) {
+		t.Errorf("expected output to be equal to expected")
+	}
 
 	// Check non-float type.
 	_, err = IsFinite(S(Bool))
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error for IsFinite(S(Bool))")
+	}
 	_, err = IsFinite(S(I32))
-	require.Error(t, err)
+	if err == nil {
+		t.Error("expected error for IsFinite(S(I32))")
+	}
 }
 
 func TestReduceWindow(t *testing.T) {
@@ -664,15 +807,22 @@ func TestReduceWindow(t *testing.T) {
 			)
 
 			if tc.expectError {
-				require.Error(t, err, "Expected an error for test case: %s", tc.name)
+				if err == nil {
+					t.Fatalf("Expected an error for test case: %s", tc.name)
+				}
 				if tc.errorMessageContains != "" {
-					assert.Contains(t, err.Error(), tc.errorMessageContains, "Error message mismatch for: %s", tc.name)
+					if !strings.Contains(err.Error(), tc.errorMessageContains) {
+						t.Errorf("Error message mismatch for: %s. Expected to contain %q, got %q", tc.name, tc.errorMessageContains, err.Error())
+					}
 				}
 			} else {
-				require.NoError(t, err, "Did not expect an error for test case: %s (error was: %v)", tc.name, err)
-				assert.True(t, tc.expectedShape.Equal(outputShape[0]),
-					"Mismatch in output shape for test case: %s. Expected %s, Got %s",
-					tc.name, tc.expectedShape, outputShape)
+				if err != nil {
+					t.Fatalf("Did not expect an error for test case: %s (error was: %v)", tc.name, err)
+				}
+				if !tc.expectedShape.Equal(outputShape[0]) {
+					t.Errorf("Mismatch in output shape for test case: %s. Expected %s, Got %s",
+						tc.name, tc.expectedShape, outputShape)
+				}
 			}
 		})
 	}
@@ -686,12 +836,16 @@ func TestDotGeneral(t *testing.T) {
 		lhs, []int{1}, []int{3, 0},
 		rhs, []int{3}, []int{0, 2},
 		F32)
-	require.NoError(t, err)
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
 	// Batch dims: 5 , 2
 	// Contracting dims: 3
 	// Cross dims: 4 (lhs) and 1 (rhs)
 	fmt.Printf("\tdotgeneral.shape=%s\n", output)
-	assert.NoError(t, output.Check(F32, 5, 2, 4, 1))
+	if err := output.Check(F32, 5, 2, 4, 1); err != nil {
+		t.Errorf("expected output.Check to pass: %v", err)
+	}
 }
 
 func TestPad(t *testing.T) {
@@ -703,8 +857,12 @@ func TestPad(t *testing.T) {
 		paddingInterior := []int{0}
 		expected := S(F32, 10)
 		output, err := Pad(operand, fillValue, paddingStart, paddingEnd, paddingInterior)
-		require.NoError(t, err)
-		require.True(t, expected.Equal(output), "Expected %s, got %s", expected, output)
+		if err != nil {
+			t.Errorf("expected no error, got %v", err)
+		}
+		if !expected.Equal(output) {
+			t.Errorf("Expected %s, got %s", expected, output)
+		}
 	})
 
 	t.Run("2DWithInterior", func(t *testing.T) {
@@ -715,8 +873,12 @@ func TestPad(t *testing.T) {
 		paddingInterior := []int{1, 1}
 		expected := S(F32, 6, 9)
 		output, err := Pad(operand, fillValue, paddingStart, paddingEnd, paddingInterior)
-		require.NoError(t, err)
-		require.True(t, expected.Equal(output), "Expected %s, got %s", expected, output)
+		if err != nil {
+			t.Errorf("expected no error, got %v", err)
+		}
+		if !expected.Equal(output) {
+			t.Errorf("Expected %s, got %s", expected, output)
+		}
 	})
 
 	t.Run("3DPadding", func(t *testing.T) {
@@ -727,8 +889,12 @@ func TestPad(t *testing.T) {
 		paddingInterior := []int{0, 0, 0}
 		expected := S(F32, 4, 5, 3)
 		output, err := Pad(operand, fillValue, paddingStart, paddingEnd, paddingInterior)
-		require.NoError(t, err)
-		require.True(t, expected.Equal(output), "Expected %s, got %s", expected, output)
+		if err != nil {
+			t.Errorf("expected no error, got %v", err)
+		}
+		if !expected.Equal(output) {
+			t.Errorf("Expected %s, got %s", expected, output)
+		}
 	})
 
 	t.Run("ErrorWrongFillValueDType", func(t *testing.T) {
@@ -738,7 +904,9 @@ func TestPad(t *testing.T) {
 		paddingEnd := []int{1}
 		paddingInterior := []int{0}
 		_, err := Pad(operand, fillValue, paddingStart, paddingEnd, paddingInterior)
-		require.Error(t, err)
+		if err == nil {
+			t.Error("expected error for Pad with wrong fill value dtype")
+		}
 	})
 
 	t.Run("ErrorNonScalarFillValue", func(t *testing.T) {
@@ -748,7 +916,9 @@ func TestPad(t *testing.T) {
 		paddingEnd := []int{1}
 		paddingInterior := []int{0}
 		_, err := Pad(operand, fillValue, paddingStart, paddingEnd, paddingInterior)
-		require.Error(t, err)
+		if err == nil {
+			t.Error("expected error for Pad with non-scalar fill value")
+		}
 	})
 
 	t.Run("ErrorMismatchedRank", func(t *testing.T) {
@@ -758,7 +928,9 @@ func TestPad(t *testing.T) {
 		paddingEnd := []int{1, 1}
 		paddingInterior := []int{0, 0}
 		_, err := Pad(operand, fillValue, paddingStart, paddingEnd, paddingInterior)
-		require.Error(t, err)
+		if err == nil {
+			t.Error("expected error for Pad with mismatched rank")
+		}
 	})
 
 	t.Run("NegativePadding", func(t *testing.T) {
@@ -769,8 +941,12 @@ func TestPad(t *testing.T) {
 		paddingInterior := []int{0}
 		expected := S(F32, 1)
 		output, err := Pad(operand, fillValue, paddingStart, paddingEnd, paddingInterior)
-		require.NoError(t, err)
-		require.True(t, expected.Equal(output), "Expected %s, got %s", expected, output)
+		if err != nil {
+			t.Errorf("expected no error, got %v", err)
+		}
+		if !expected.Equal(output) {
+			t.Errorf("Expected %s, got %s", expected, output)
+		}
 	})
 
 	t.Run("ErrorNegativeInterior", func(t *testing.T) {
@@ -780,7 +956,9 @@ func TestPad(t *testing.T) {
 		paddingEnd := []int{0}
 		paddingInterior := []int{-1}
 		_, err := Pad(operand, fillValue, paddingStart, paddingEnd, paddingInterior)
-		require.Error(t, err)
+		if err == nil {
+			t.Error("expected error for Pad with negative interior padding")
+		}
 	})
 }
 
@@ -790,27 +968,43 @@ func TestCollectiveOps(t *testing.T) {
 
 	t.Run("AllGather", func(t *testing.T) {
 		output, err := AllGather(operand, replicaGroups, 1)
-		require.NoError(t, err)
+		if err != nil {
+			t.Errorf("expected no error, got %v", err)
+		}
 		expected := S(F32, 2, 8)
-		require.True(t, expected.Equal(output), "Expected %s, got %s", expected, output)
+		if !expected.Equal(output) {
+			t.Errorf("Expected %s, got %s", expected, output)
+		}
 
 		_, err = AllGather(operand, replicaGroups, 2)
-		require.Error(t, err)
+		if err == nil {
+			t.Error("expected error for AllGather with invalid axis")
+		}
 	})
 
 	t.Run("AllToAll", func(t *testing.T) {
 		output, err := AllToAll(operand, replicaGroups, 1, 0, 2)
-		require.NoError(t, err)
+		if err != nil {
+			t.Errorf("expected no error, got %v", err)
+		}
 		expected := S(F32, 4, 2)
-		require.True(t, expected.Equal(output), "Expected %s, got %s", expected, output)
+		if !expected.Equal(output) {
+			t.Errorf("Expected %s, got %s", expected, output)
+		}
 
 		_, err = AllToAll(operand, replicaGroups, 2, 0, 2)
-		require.Error(t, err)
+		if err == nil {
+			t.Error("expected error for AllToAll with invalid axis")
+		}
 	})
 
 	t.Run("CollectivePermute", func(t *testing.T) {
 		output, err := CollectivePermute(operand, [][2]int{{0, 1}})
-		require.NoError(t, err)
-		require.True(t, operand.Equal(output), "Expected %s, got %s", operand, output)
+		if err != nil {
+			t.Errorf("expected no error, got %v", err)
+		}
+		if !operand.Equal(output) {
+			t.Errorf("Expected %s, got %s", operand, output)
+		}
 	})
 }
