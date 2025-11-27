@@ -95,3 +95,21 @@ The `shapeinference` sub-package provides a way to infer the shapes of StableHLO
 given the shapes of the inputs. We had to reimplement this in Go from the specification to avoid any C++ dependency.
 If you find any discrepancies or errors due to wrong output shapes, please open an issue.
 
+## Installation
+
+You don't need anything installed to use `go-stablehlo`, it's a pure Go library.
+
+But the tests use [`gopjrt`](https://github.com/gomlx/gopjrt), which requires an installed PJRT binary. 
+To install the Linux CPU one (most commonly used for testing and development) under `~/.local/lib`, 
+use the following command:
+
+```bash
+go run github.com/gomlx/gopjrt/cmd/gopjrt_installer@latest -plugin=linux -version=latest -path=~/.local
+```
+
+For more options (GPU, different linux versions, different directories) simply run without any flags and it will 
+show up a dialog to choose from:
+
+```bash
+go run github.com/gomlx/gopjrt/cmd/gopjrt_installer@latest
+```
