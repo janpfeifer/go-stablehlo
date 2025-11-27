@@ -15,7 +15,6 @@ import (
 	. "github.com/gx-org/go-stablehlo"
 	"github.com/gx-org/go-stablehlo/types"
 	"github.com/gx-org/go-stablehlo/types/shapes"
-	"github.com/stretchr/testify/require"
 	"k8s.io/klog/v2"
 )
 
@@ -76,14 +75,22 @@ func pjrtClientsIterator(t *testing.T) iter.Seq2[string, *pjrt.Client] {
 	return func(yield func(string, *pjrt.Client) bool) {
 		for _, pluginName := range getPluginNames() {
 			plugin, err := pjrt.GetPlugin(pluginName)
-			require.NoError(t, err, "failed to load plugin %q", pluginName)
+			if err != nil {
+				t.Errorf("failed to load plugin %q: %v", pluginName, err)
+				return
+			}
 			klog.Infof("Plugin: %s", plugin)
 			client, err := plugin.NewClient(nil)
-			require.NoError(t, err, "failed to create client for plugin %q", pluginName)
+			if err != nil {
+				t.Errorf("failed to create client for plugin %q: %v", pluginName, err)
+				return
+			}
 			klog.Infof("Client %s (version %s): %d devices",
 				client.Platform(), client.PlatformVersion(), client.NumDevices())
 			done := yield(pluginName, client)
-			require.NoError(t, client.Destroy())
+			if err := client.Destroy(); err != nil {
+				t.Errorf("failed to destroy client: %v", err)
+			}
 			if done {
 				return
 			}
@@ -107,7 +114,10 @@ func iterateClientsAndTest(t *testing.T, testFn func(*testing.T, *pjrt.Client)) 
 // compileAndExecute program with PJRT. All inputs are donated.
 func compileAndExecute(t *testing.T, client *pjrt.Client, program []byte, inputs ...*pjrt.Buffer) []*pjrt.Buffer {
 	loadedExec, err := client.Compile().WithStableHLO(program).Done()
-	require.NoErrorf(t, err, "failed to compile program: \n%s", program)
+	if err != nil {
+		t.Fatalf("failed to compile program: \n%s\nError: %v", program, err)
+		return nil
+	}
 	defer func() {
 		err := loadedExec.Destroy()
 		if err != nil {
@@ -115,13 +125,22 @@ func compileAndExecute(t *testing.T, client *pjrt.Client, program []byte, inputs
 		}
 	}()
 	outputBuffers, err := loadedExec.Execute(inputs...).DonateAll().Done()
-	require.NoErrorf(t, err, "failed to execute program: \n%s", program)
+	if err != nil {
+		t.Fatalf("failed to execute program: \n%s\nError: %v", program, err)
+		return nil
+	}
 	return outputBuffers
 }
 
 type FlatAndDims struct {
 	Flat any
 	Dims []int
+}
+
+const delta = 1e-4
+
+func inDelta(a, b float64, delta float64) bool {
+	return math.Abs(a-b) <= delta
 }
 
 // requireBuffersEqual checks that the actual buffers contents match the expected flat values.
@@ -135,21 +154,68 @@ func requireBuffersEqual(t *testing.T, expected []FlatAndDims, got []*pjrt.Buffe
 			}
 		}
 	}()
-	require.Len(t, got, len(expected))
+	if len(got) != len(expected) {
+		t.Errorf("expected %d buffers, got %d", len(expected), len(got))
+		return
+	}
 	for i, b := range got {
 		gotFlat, gotDims, err := b.ToFlatDataAndDimensions()
+		if err != nil {
+			t.Errorf("failed to get flat data and dimensions from buffer %d: %v", i, err)
+			continue
+		}
 		expectedShape, err := shapes.FromAnyValue(expected[i].Flat)
-		require.NoErrorf(t, err, "failed to get shape for output #%d: %v", i, expected[i].Flat)
+		if err != nil {
+			t.Errorf("failed to get shape for output #%d: %v", i, expected[i].Flat)
+			continue
+		}
 		dtype := expectedShape.DType
 		fmt.Printf("\t - output #%d:\n\t   - Got: dims=%v, flat_values=%v\n", i, gotDims, gotFlat)
 		fmt.Printf("\t   - Want(%s): dims=%v, flat_values=%v\n", dtype, expected[i].Dims, expected[i].Flat)
-		require.NoErrorf(t, err, "failed to get buffer contents for output #%d, expected flat value %v", i, expected[i].Flat)
-		require.Equalf(t, expected[i].Dims, gotDims, "output #%d dims don't match", i)
+
+		// Compare Dims
+		if !reflect.DeepEqual(expected[i].Dims, gotDims) {
+			t.Errorf("output #%d dims don't match: expected %v, got %v", i, expected[i].Dims, gotDims)
+		}
+
+		// Compare Flat Data
 		switch dtype {
-		case dtypes.Float64, dtypes.Float32:
-			require.InDeltaSlicef(t, expected[i].Flat, gotFlat, 1e-4, "output #%d flat values don't match", i)
+		case dtypes.Float64:
+			expSlice := expected[i].Flat.([]float64)
+			gotSlice := gotFlat.([]float64)
+			if len(expSlice) != len(gotSlice) {
+				t.Errorf("output #%d flat values length mismatch: expected %d, got %d", i, len(expSlice), len(gotSlice))
+			} else {
+				for j, v := range expSlice {
+					if !inDelta(v, gotSlice[j], delta) {
+						if !(math.IsInf(v, 1) && math.IsInf(gotSlice[j], 1)) &&
+							!(math.IsInf(v, -1) && math.IsInf(gotSlice[j], -1)) &&
+							!(math.IsNaN(v) && math.IsNaN(gotSlice[j])) {
+							t.Errorf("output #%d flat value %d mismatch: expected %v, got %v", i, j, v, gotSlice[j])
+						}
+					}
+				}
+			}
+		case dtypes.Float32:
+			expSlice := expected[i].Flat.([]float32)
+			gotSlice := gotFlat.([]float32)
+			if len(expSlice) != len(gotSlice) {
+				t.Errorf("output #%d flat values length mismatch: expected %d, got %d", i, len(expSlice), len(gotSlice))
+			} else {
+				for j, v := range expSlice {
+					if !inDelta(float64(v), float64(gotSlice[j]), delta) {
+						if !(math.IsInf(float64(v), 1) && math.IsInf(float64(gotSlice[j]), 1)) &&
+							!(math.IsInf(float64(v), -1) && math.IsInf(float64(gotSlice[j]), -1)) &&
+							!(math.IsNaN(float64(v)) && math.IsNaN(float64(gotSlice[j]))) {
+							t.Errorf("output #%d flat value %d mismatch: expected %v, got %v", i, j, v, gotSlice[j])
+						}
+					}
+				}
+			}
 		default:
-			require.Equalf(t, expected[i].Flat, gotFlat, "output #%d flat values don't match", i)
+			if !reflect.DeepEqual(expected[i].Flat, gotFlat) {
+				t.Errorf("output #%d flat values don't match: expected %v, got %v", i, expected[i].Flat, gotFlat)
+			}
 		}
 	}
 }
@@ -482,8 +548,12 @@ func testOps(t *testing.T, client *pjrt.Client) {
 			fmt.Printf("%s program:\n%s", t.Name(), withLines(program))
 			outputs := compileAndExecute(t, client, program)
 			flat, dims, err := outputs[0].ToFlatDataAndDimensions()
-			require.NoError(t, err)
-			require.Equal(t, []int{numSamples}, dims)
+			if err != nil {
+				t.Fatalf("failed to get flat data and dims: %v", err)
+			}
+			if !reflect.DeepEqual([]int{numSamples}, dims) {
+				t.Errorf("expected dims [%d], got %v", numSamples, dims)
+			}
 			noise := flat.([]uint64)
 			// Count bits in each uint64
 			var totalBits int
@@ -494,8 +564,9 @@ func testOps(t *testing.T, client *pjrt.Client) {
 			expectedBits := 32 * numSamples
 			fmt.Printf("\tgot %d bits set, expected %d\n", totalBits, expectedBits)
 			margin := 2 * numSamples
-			require.Greater(t, totalBits, expectedBits-margin)
-			require.Less(t, totalBits, expectedBits+margin)
+			if totalBits <= expectedBits-margin || totalBits >= expectedBits+margin {
+				t.Errorf("expected total bits between %d and %d, got %d", expectedBits-margin, expectedBits+margin, totalBits)
+			}
 		})
 	}
 
@@ -620,23 +691,35 @@ func testOps(t *testing.T, client *pjrt.Client) {
 
 		gotDims := must1(outputs[0].Dimensions())
 		fmt.Printf("\t- FFTForward output dims: %v\n", gotDims)
-		require.Equal(t, []int{3, 4, 10}, gotDims)
+		if !reflect.DeepEqual([]int{3, 4, 10}, gotDims) {
+			t.Errorf("FFTForward output dims: expected [3 4 10], got %v", gotDims)
+		}
 
 		gotDims = must1(outputs[1].Dimensions())
 		fmt.Printf("\t- FFTInverse output dims: %v\n", gotDims)
-		require.Equal(t, []int{3, 4, 10}, gotDims)
+		if !reflect.DeepEqual([]int{3, 4, 10}, gotDims) {
+			t.Errorf("FFTInverse output dims: expected [3 4 10], got %v", gotDims)
+		}
 
 		gotDims = must1(outputs[2].Dimensions())
 		gotDType := must1(outputs[2].DType())
 		fmt.Printf("\t- FFTForwardReal output dtype %s, dims: %v\n", gotDType, gotDims)
-		require.Equal(t, []int{3, 4, 10/2 + 1}, gotDims)
-		require.Equal(t, dtypes.Complex64, gotDType)
+		if !reflect.DeepEqual([]int{3, 4, 10/2 + 1}, gotDims) {
+			t.Errorf("FFTForwardReal output dims: expected [3 4 6], got %v", gotDims)
+		}
+		if gotDType != dtypes.Complex64 {
+			t.Errorf("FFTForwardReal output dtype: expected Complex64, got %s", gotDType)
+		}
 
 		gotDims = must1(outputs[3].Dimensions())
 		gotDType = must1(outputs[3].DType())
 		fmt.Printf("\t- FFTInverseReal output dtype %s, dims: %v\n", gotDType, gotDims)
-		require.Equal(t, []int{3, 4, 2 * (10 - 1)}, gotDims)
-		require.Equal(t, dtypes.Float32, gotDType)
+		if !reflect.DeepEqual([]int{3, 4, 2 * (10 - 1)}, gotDims) {
+			t.Errorf("FFTInverseReal output dims: expected [3 4 18], got %v", gotDims)
+		}
+		if gotDType != dtypes.Float32 {
+			t.Errorf("FFTInverseReal output dtype: expected Float32, got %s", gotDType)
+		}
 	})
 
 	t.Run("ReduceWindow", func(t *testing.T) {
@@ -784,7 +867,9 @@ func testOps(t *testing.T, client *pjrt.Client) {
 		scale := must1(fn.ConstantFromFlatAndDimensions([]float32{1, 2, 3}, 3))
 		offset := must1(fn.ConstantFromFlatAndDimensions([]float32{10, 100, 1000}, 3))
 		xNorm, batchMean, batchVariance, err := BatchNormTraining(x, scale, offset, 1e-7, -1)
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("BatchNormTraining error: %v", err)
+		}
 		must(fn.Return(xNorm, batchMean, batchVariance))
 		program := must1(builder.Build())
 		fmt.Printf("%s program:\n%s", t.Name(), withLines(program))
@@ -815,7 +900,9 @@ func testOps(t *testing.T, client *pjrt.Client) {
 		gradOutput := must1(fn.ConstantFromScalar(float32(1)))
 		gradOutput = must1(BroadcastInDim(gradOutput, shapes.Make(dtypes.F32, 7, 3), nil))
 		gradX, gradScale, gradOffset, err := BatchNormGradient(x, scale, mean, variance, gradOutput, 1e-7, -1)
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("BatchNormGradient error: %v", err)
+		}
 		must(fn.Return(gradX, gradScale, gradOffset))
 		program := must1(builder.Build())
 		fmt.Printf("%s program:\n%s", t.Name(), withLines(program))
@@ -1029,7 +1116,9 @@ func testUnaryOps(t *testing.T, client *pjrt.Client) {
 		shape := shapes.Make(dtype)
 		fn := builder.Main()
 		arg, err := fn.Input(shape)
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("fn.Input error: %v", err)
+		}
 		result := must1(op(arg))
 		must(fn.Return(result))
 		program := must1(builder.Build())
@@ -1166,16 +1255,24 @@ func testConstants(t *testing.T, client *pjrt.Client) {
 		builder := New(t.Name())
 		fn := builder.Main()
 		c, err := fn.ConstantFromScalar(scalar)
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("ConstantFromScalar error: %v", err)
+		}
 		must(fn.Return(c))
 		program := must1(builder.Build())
 		fmt.Printf("%s program:\n%s", t.Name(), withLines(program))
 		output := compileAndExecute(t, client, program)[0]
 		gotFlat, gotDim, err := output.ToFlatDataAndDimensions()
-		require.NoError(t, err)
-		require.Len(t, gotDim, 0)
+		if err != nil {
+			t.Fatalf("ToFlatDataAndDimensions error: %v", err)
+		}
+		if len(gotDim) != 0 {
+			t.Errorf("expected 0 dims, got %v", gotDim)
+		}
 		gotScalar := reflect.ValueOf(gotFlat).Index(0).Interface()
-		require.Equal(t, scalar, gotScalar)
+		if !reflect.DeepEqual(scalar, gotScalar) {
+			t.Errorf("scalar mismatch: expected %v, got %v", scalar, gotScalar)
+		}
 	}
 
 	t.Run("float32", func(t *testing.T) { testScalar(t, float32(3.0)) })
@@ -1191,15 +1288,23 @@ func testConstants(t *testing.T, client *pjrt.Client) {
 		builder := New(t.Name())
 		fn := builder.Main()
 		c, err := fn.ConstantFromFlatAndDimensions(flat, dimensions...)
-		require.NoError(t, err)
+		if err != nil {
+			t.Fatalf("ConstantFromFlatAndDimensions error: %v", err)
+		}
 		must(fn.Return(c))
 		program := must1(builder.Build())
 		fmt.Printf("%s program:\n%s", t.Name(), withLines(program))
 		output := compileAndExecute(t, client, program)[0]
 		gotFlat, gotDims, err := output.ToFlatDataAndDimensions()
-		require.NoError(t, err)
-		require.Equal(t, dimensions, gotDims)
-		require.Equal(t, flat, gotFlat)
+		if err != nil {
+			t.Fatalf("ToFlatDataAndDimensions error: %v", err)
+		}
+		if !reflect.DeepEqual(dimensions, gotDims) {
+			t.Errorf("dimensions mismatch: expected %v, got %v", dimensions, gotDims)
+		}
+		if !reflect.DeepEqual(flat, gotFlat) {
+			t.Errorf("flat data mismatch: expected %v, got %v", flat, gotFlat)
+		}
 	}
 
 	t.Run("0D-int8", func(t *testing.T) { testTensor(t, []int8{-3}) })

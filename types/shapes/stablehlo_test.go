@@ -4,14 +4,17 @@ import (
 	"testing"
 
 	"github.com/gomlx/gopjrt/dtypes"
-	"github.com/stretchr/testify/require"
 )
 
 func TestToStableHLO(t *testing.T) {
 	shape := Make(dtypes.Float32, 1, 10)
-	require.Equal(t, "tensor<1x10xf32>", shape.ToStableHLO())
+	if shape.ToStableHLO() != "tensor<1x10xf32>" {
+		t.Errorf("expected tensor<1x10xf32>, got %s", shape.ToStableHLO())
+	}
 
 	// Test scalar.
 	shape = Make(dtypes.Int32)
-	require.Equal(t, "tensor<i32>", shape.ToStableHLO())
+	if shape.ToStableHLO() != "tensor<i32>" {
+		t.Errorf("expected tensor<i32>, got %s", shape.ToStableHLO())
+	}
 }
