@@ -7,8 +7,8 @@ import (
 	"path"
 	"text/template"
 
-	"github.com/gomlx/stablehlo/internal/utils"
-	"github.com/gomlx/stablehlo/shapeinference"
+	"github.com/gx-org/go-stablehlo/internal/utils"
+	"github.com/gx-org/go-stablehlo/shapeinference"
 	"github.com/janpfeifer/must"
 )
 
@@ -26,7 +26,7 @@ var (
 package stablehlo
 
 import (
-	"github.com/gomlx/stablehlo/internal/optypes"
+	"github.com/gx-org/go-stablehlo/internal/optypes"
 )
 
 {{- range .}}

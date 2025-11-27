@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/gomlx/stablehlo/types/shapes"
+	"github.com/gx-org/go-stablehlo/types/shapes"
 	"github.com/pkg/errors"
 )
 

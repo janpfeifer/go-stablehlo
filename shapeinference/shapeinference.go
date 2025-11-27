@@ -15,10 +15,10 @@ import (
 	"slices"
 
 	"github.com/gomlx/gopjrt/dtypes"
-	"github.com/gomlx/stablehlo/internal/optypes"
-	"github.com/gomlx/stablehlo/internal/utils"
-	"github.com/gomlx/stablehlo/types"
-	"github.com/gomlx/stablehlo/types/shapes"
+	"github.com/gx-org/go-stablehlo/internal/optypes"
+	"github.com/gx-org/go-stablehlo/internal/utils"
+	"github.com/gx-org/go-stablehlo/types"
+	"github.com/gx-org/go-stablehlo/types/shapes"
 	"github.com/pkg/errors"
 )
 

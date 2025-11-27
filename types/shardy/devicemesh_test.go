@@ -3,7 +3,7 @@ package shardy_test
 import (
 	"testing"
 
-	"github.com/gomlx/stablehlo/types/shardy"
+	"github.com/gx-org/go-stablehlo/types/shardy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

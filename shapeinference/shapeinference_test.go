@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/gomlx/gopjrt/dtypes"
-	"github.com/gomlx/stablehlo/internal/optypes"
-	"github.com/gomlx/stablehlo/types/shapes"
+	"github.com/gx-org/go-stablehlo/internal/optypes"
+	"github.com/gx-org/go-stablehlo/types/shapes"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

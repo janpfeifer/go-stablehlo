@@ -12,9 +12,9 @@ import (
 
 	"github.com/gomlx/gopjrt/dtypes"
 	"github.com/gomlx/gopjrt/dtypes/bfloat16"
-	"github.com/gomlx/stablehlo/internal/optypes"
-	"github.com/gomlx/stablehlo/internal/utils"
-	"github.com/gomlx/stablehlo/types/shapes"
+	"github.com/gx-org/go-stablehlo/internal/optypes"
+	"github.com/gx-org/go-stablehlo/internal/utils"
+	"github.com/gx-org/go-stablehlo/types/shapes"
 	"github.com/pkg/errors"
 	"github.com/x448/float16"
 )

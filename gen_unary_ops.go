@@ -3,7 +3,7 @@
 package stablehlo
 
 import (
-	"github.com/gomlx/stablehlo/internal/optypes"
+	"github.com/gx-org/go-stablehlo/internal/optypes"
 )
 
 // Abs implements the corresponding standard unary operation.

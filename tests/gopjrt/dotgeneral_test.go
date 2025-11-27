@@ -7,9 +7,9 @@ import (
 
 	D "github.com/gomlx/gopjrt/dtypes"
 	"github.com/gomlx/gopjrt/pjrt"
-	. "github.com/gomlx/stablehlo"
-	"github.com/gomlx/stablehlo/types"
-	S "github.com/gomlx/stablehlo/types/shapes"
+	. "github.com/gx-org/go-stablehlo"
+	"github.com/gx-org/go-stablehlo/types"
+	S "github.com/gx-org/go-stablehlo/types/shapes"
 )
 
 func TestDotGeneral(t *testing.T) {

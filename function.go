@@ -9,10 +9,10 @@ import (
 	"strings"
 
 	"github.com/gomlx/gopjrt/dtypes"
-	"github.com/gomlx/stablehlo/internal/optypes"
-	"github.com/gomlx/stablehlo/shapeinference"
-	"github.com/gomlx/stablehlo/types/shapes"
-	"github.com/gomlx/stablehlo/types/shardy"
+	"github.com/gx-org/go-stablehlo/internal/optypes"
+	"github.com/gx-org/go-stablehlo/shapeinference"
+	"github.com/gx-org/go-stablehlo/types/shapes"
+	"github.com/gx-org/go-stablehlo/types/shardy"
 	"github.com/pkg/errors"
 )
 
